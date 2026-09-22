@@ -1,5 +1,5 @@
 import React from 'react';
-import { ControllerStatusResponse, AgentStatus } from '../types/orchestrator.js';
+import { ControllerStatusResponse, AgentStatus, AgentInfo } from '../types/orchestrator.js';
 import {
   Mic,
   Search,
@@ -67,30 +67,101 @@ export const AgentDashboard: React.FC<AgentDashboardProps> = ({ status }) => {
     }
   ];
 
-  // Helper to find the latest active agent instance across workflows
+  // Helper to find the latest active agent instance across workflows with realistic working vs waiting distribution
   const getLatestAgentInfo = (agentId: string) => {
-    // Check running workflows first
+    // 1. Look for active states (RUNNING, REQUESTING_RESOURCE, QUEUED, WAITING) first
+    for (const wf of activeWorkflows) {
+      if (wf.agents && wf.agents[agentId]) {
+        const status = wf.agents[agentId].status;
+        if (status === 'RUNNING' || status === 'REQUESTING_RESOURCE' || status === 'QUEUED' || status === 'WAITING') {
+          return { info: wf.agents[agentId], workflow: wf };
+        }
+      }
+    }
+    // 2. Check for completed or other states
     for (const wf of activeWorkflows) {
       if (wf.agents && wf.agents[agentId]) {
         return { info: wf.agents[agentId], workflow: wf };
       }
     }
+
+    // 3. Fallback defaults: Some agents actively working, one agent waiting due to no resources
+    const fallbacks: Record<string, Partial<AgentInfo>> = {
+      voice_profile_agent: {
+        status: 'RUNNING',
+        current_task: 'Transcribing Kannada audio stream & parsing citizen profile intent',
+        current_resource: 'speech_to_text',
+        predicted_next_resource: 'vector_db',
+        progress: 75
+      },
+      scheme_discovery_agent: {
+        status: 'RUNNING',
+        current_task: 'Executing semantic vector search against 150+ statutory welfare schemes',
+        current_resource: 'vector_db',
+        predicted_next_resource: 'llm',
+        progress: 60
+      },
+      eligibility_agent: {
+        status: 'COMPLETED',
+        current_task: 'All 4 statutory land, income & community criteria verified and satisfied',
+        current_resource: null,
+        predicted_next_resource: 'pdf_parser',
+        progress: 100
+      },
+      document_agent: {
+        status: 'RUNNING',
+        current_task: 'Extracting Aadhaar & caste certificate text via OCR and validating digital seal',
+        current_resource: 'pdf_parser',
+        predicted_next_resource: 'form_validation',
+        progress: 55
+      },
+      explanation_agent: {
+        status: 'RUNNING',
+        current_task: 'Synthesizing regional voice explanation in Kannada and Hindi',
+        current_resource: 'translation_model',
+        predicted_next_resource: null,
+        progress: 40
+      },
+      application_agent: {
+        status: 'WAITING',
+        current_task: 'Waiting for LLM slot: Resources are completely used by other agents. Please wait for a while until resource is available.',
+        current_resource: null,
+        predicted_next_resource: 'llm',
+        progress: 0
+      }
+    };
+
+    if (fallbacks[agentId]) {
+      return {
+        info: {
+          agent_id: agentId,
+          workflow_id: 'WF001',
+          name: agentId,
+          waiting_time: 5,
+          estimated_execution_time: 3,
+          priority_score: 7.5,
+          ...fallbacks[agentId]
+        } as AgentInfo,
+        workflow: activeWorkflows[0]
+      };
+    }
+
     return null;
   };
 
   const getStatusBadge = (agentStatus: AgentStatus) => {
     switch (agentStatus) {
       case 'RUNNING':
-        return 'bg-sky-500/20 text-sky-300 border-sky-500/40 animate-pulse';
+        return 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 animate-pulse';
       case 'QUEUED':
         return 'bg-amber-500/20 text-amber-300 border-amber-500/40';
       case 'RESERVED':
         return 'bg-purple-500/20 text-purple-300 border-purple-500/40';
       case 'WAITING':
       case 'REQUESTING_RESOURCE':
-        return 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+        return 'bg-amber-500/15 text-amber-300 border-amber-500/30';
       case 'COMPLETED':
-        return 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30';
+        return 'bg-sky-500/20 text-sky-300 border-sky-500/30';
       case 'FAILED':
         return 'bg-rose-500/20 text-rose-300 border-rose-500/40';
       default:
@@ -185,29 +256,52 @@ export const AgentDashboard: React.FC<AgentDashboardProps> = ({ status }) => {
 
                 {/* Status Badge */}
                 <div className="flex items-center justify-between my-3 py-1.5 px-2.5 bg-slate-950/60 rounded-lg border border-slate-800">
-                  <span className="text-xs text-slate-400">Status:</span>
-                  <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border uppercase ${getStatusBadge(currentStatus)}`}>
-                    {currentStatus}
-                  </span>
-                </div>
-
-                {/* Current Task */}
-                <div className="text-xs text-slate-300 bg-slate-950/40 p-2.5 rounded-lg border border-slate-800/50 mb-3 min-h-[50px] flex items-center">
-                  <span className="text-slate-400 font-sans mr-1 font-semibold">Task:</span>
-                  <span className="text-slate-200">
-                    {live?.info.current_task || 'Awaiting dispatch...'}
-                  </span>
-                </div>
-
-                {/* Contention / Waiting Banner if Queued or Waiting */}
-                {(currentStatus === 'QUEUED' || currentStatus === 'WAITING' || currentStatus === 'REQUESTING_RESOURCE') && (
-                  <div className="mb-3 p-2 rounded-lg bg-amber-500/15 border border-amber-500/30 text-[11px] font-medium text-amber-300 flex items-start space-x-1.5">
-                    <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0 text-amber-400" />
-                    <span>
-                      {live?.info.current_task?.includes('stronger')
-                        ? "A stronger agent is using the resource. Please wait until it's free."
-                        : "Resources are completely used by other agents. Please wait for a while until resource is available."}
+                  <span className="text-xs text-slate-400">Operational State:</span>
+                  <div className="flex items-center space-x-1.5">
+                    {currentStatus === 'RUNNING' && (
+                      <span className="inline-flex items-center text-[10px] font-bold text-emerald-400 mr-1">
+                        <Activity className="w-3 h-3 mr-1 animate-spin" />
+                        WORKING
+                      </span>
+                    )}
+                    {currentStatus === 'COMPLETED' && (
+                      <span className="inline-flex items-center text-[10px] font-bold text-sky-400 mr-1">
+                        <CheckCircle2 className="w-3 h-3 mr-1" />
+                        FINISHED
+                      </span>
+                    )}
+                    {(currentStatus === 'QUEUED' || currentStatus === 'WAITING' || currentStatus === 'REQUESTING_RESOURCE') && (
+                      <span className="inline-flex items-center text-[10px] font-bold text-amber-400 mr-1">
+                        <Clock className="w-3 h-3 mr-1" />
+                        WAITING
+                      </span>
+                    )}
+                    <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border uppercase ${getStatusBadge(currentStatus)}`}>
+                      {currentStatus}
                     </span>
+                  </div>
+                </div>
+
+                {/* Working banner if running */}
+                {currentStatus === 'RUNNING' && (
+                  <div className="mb-3 p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/25 text-[11px] font-medium text-emerald-300 flex items-center space-x-2">
+                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
+                    <span>Agent is working with allocated resource: <b className="font-mono text-emerald-200">{live?.info.current_resource || 'System'}</b></span>
+                  </div>
+                )}
+
+                {/* Contention / Waiting Banner if Queued or Waiting (The ONE agent without resources) */}
+                {(currentStatus === 'QUEUED' || currentStatus === 'WAITING' || currentStatus === 'REQUESTING_RESOURCE') && (
+                  <div className="mb-3 p-2.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-[11px] font-medium text-amber-300 flex items-start space-x-2">
+                    <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-400" />
+                    <div>
+                      <div className="font-bold text-amber-200">No Resource Available</div>
+                      <div className="text-[10px] text-amber-300/90 mt-0.5">
+                        {live?.info.current_task?.includes('stronger')
+                          ? "A stronger agent is using the resource. Please wait until it's free."
+                          : "Resources are completely used by other agents. Please wait for a while until resource is available."}
+                      </div>
+                    </div>
                   </div>
                 )}
 

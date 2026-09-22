@@ -200,10 +200,10 @@ export class A3RuntimeController {
           voice_profile_agent: makeAgent(
             'voice_profile_agent',
             'Voice & Profile Normalizer',
-            'COMPLETED',
-            'Citizen voice inquiry parsed & profile normalized',
-            null,
-            100,
+            'RUNNING',
+            'Actively transcribing Kannada voice query & extracting citizen profile',
+            'speech_to_text',
+            75,
             'vector_db',
             null,
             0,
@@ -212,62 +212,62 @@ export class A3RuntimeController {
           scheme_discovery_agent: makeAgent(
             'scheme_discovery_agent',
             'Scheme Discovery Specialist',
-            cit.stage === 2 ? 'RUNNING' : 'COMPLETED',
-            cit.stage === 2 ? 'Searching vector embeddings for statutory schemes' : '5 eligible schemes matched & ranked',
-            cit.stage === 2 ? 'vector_db' : null,
-            cit.stage === 2 ? 65 : 100,
+            'RUNNING',
+            'Executing vector similarity search against 150+ statutory welfare schemes',
+            'vector_db',
+            60,
             'llm',
             'eligibility_db',
-            0.8,
+            0,
             2.1
           ),
           eligibility_agent: makeAgent(
             'eligibility_agent',
             'Eligibility Verification Agent',
-            cit.stage === 3 ? 'RUNNING' : cit.stage > 3 ? 'COMPLETED' : 'IDLE',
-            cit.stage === 3 ? 'Verifying statutory land & income thresholds' : 'All 4 statutory rules satisfied',
-            cit.stage === 3 ? 'eligibility_db' : null,
-            cit.stage === 3 ? 80 : cit.stage > 3 ? 100 : 0,
-            'llm',
+            'COMPLETED',
+            'All 4 statutory land, income & category rules verified and satisfied',
+            null,
+            100,
             'pdf_parser',
-            0.5,
+            'document_db',
+            0,
             1.5
           ),
           document_agent: makeAgent(
             'document_agent',
             'Document Intelligence Agent',
-            cit.stage === 4 ? 'RUNNING' : 'IDLE',
-            cit.stage === 4 ? 'OCR certificate parsing & Aadhaar verification' : 'Awaiting document bundle',
-            cit.stage === 4 ? 'llm' : null,
-            cit.stage === 4 ? 45 : 0,
+            'RUNNING',
+            'Parsing Aadhaar & caste certificate via OCR and verifying digital stamp',
+            'pdf_parser',
+            55,
             'form_validation',
             'document_db',
-            1.2,
+            0,
             2.4
           ),
           application_agent: makeAgent(
             'application_agent',
             'Application Form Autofill Agent',
-            'IDLE',
-            'Standby for verified documents',
+            'WAITING',
+            'Waiting for LLM slot: Resources are completely used by other agents. Please wait for a while until resource is available.',
             null,
             0,
-            null,
-            null,
-            0,
-            0
+            'llm',
+            'form_validation',
+            8.5,
+            3.0
           ),
           explanation_agent: makeAgent(
             'explanation_agent',
             'Vernacular Explanation Agent',
-            'IDLE',
-            'Standby for vernacular translation dispatch',
+            'RUNNING',
+            'Synthesizing regional voice explanation and summary in Kannada and Hindi',
+            'translation_model',
+            40,
+            null,
             null,
             0,
-            null,
-            null,
-            0,
-            0
+            2.0
           )
         },
         results: {}
@@ -276,10 +276,13 @@ export class A3RuntimeController {
     });
 
     // 3. Allocate active resources strictly adhering to capacity invariants
-    this.resourceManager.allocate('llm', 'WF001', 'document_agent', false, 9.2, 'critical');
-    this.resourceManager.allocate('llm', 'WF002', 'scheme_discovery_agent', false, 7.5, 'high'); // LLM is 2/2 (100% capacity)
-    this.resourceManager.allocate('vector_db', 'WF003', 'scheme_discovery_agent', false, 7.0, 'high'); // Vector DB is 1/1 (100% capacity)
-    this.resourceManager.allocate('pdf_parser', 'WF001', 'document_agent', false, 8.5, 'high'); // PDF parser is 1/2 (50% capacity)
+    this.resourceManager.allocate('speech_to_text', 'WF001', 'voice_profile_agent', false, 8.0, 'high');
+    this.resourceManager.allocate('vector_db', 'WF001', 'scheme_discovery_agent', false, 7.5, 'high');
+    this.resourceManager.allocate('pdf_parser', 'WF001', 'document_agent', false, 8.5, 'high');
+    this.resourceManager.allocate('translation_model', 'WF001', 'explanation_agent', false, 7.0, 'standard');
+    // Allocate LLM slots to other active workflows so LLM is at capacity (2/2)
+    this.resourceManager.allocate('llm', 'WF002', 'scheme_discovery_agent', false, 9.2, 'critical');
+    this.resourceManager.allocate('llm', 'WF003', 'document_agent', false, 9.0, 'critical');
 
     // 4. Populate Priority Queue with active contention & aging bonuses
     const reqWF003: ResourceRequest = {

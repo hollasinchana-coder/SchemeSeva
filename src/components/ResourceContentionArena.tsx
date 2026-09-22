@@ -16,7 +16,8 @@ import {
   Unlock,
   Flame,
   Scale,
-  Users
+  Users,
+  Activity
 } from 'lucide-react';
 import { ControllerStatusResponse } from '../types/orchestrator.js';
 
@@ -132,7 +133,7 @@ export const ResourceContentionArena: React.FC<ResourceContentionArenaProps> = (
   ]);
 
   const [contentionEventMessage, setContentionEventMessage] = useState<string | null>(
-    "Resources are completely used by other agents. Please wait for a while until resource is available. If a stronger agent is using the resource, then ask it to wait until it's free."
+    "Orchestrator Status: Multiple agents are actively working across resources, while 1 agent is waiting in queue as LLM capacity is completely used."
   );
 
   const [activeTab, setActiveTab] = useState<'arena' | 'math' | 'live_telemetry'>('arena');
@@ -538,23 +539,41 @@ export const ResourceContentionArena: React.FC<ResourceContentionArenaProps> = (
                               Citizen Beneficiary: <b className="text-slate-700 dark:text-slate-300">{agent.citizenName}</b> ({agent.userType}) · Target: {agent.targetTool}
                             </p>
 
-                            {/* Contention Status Message */}
-                            <div className={`mt-2 p-2 rounded-xl border text-xs font-semibold flex items-center space-x-2 ${
-                              (slot1Agent && (slot1Agent.name.includes('Emergency') || slot1Agent.id === 'voice_profile_agent') && agent.effectivePriority < 8.0)
-                                ? isLightMode
+                            {/* Contention / Parallel Working Status Message */}
+                            {agent.id === 'application_agent' ? (
+                              <div className={`mt-2 p-2 rounded-xl border text-xs font-semibold flex items-center space-x-2 ${
+                                isLightMode
                                   ? 'bg-amber-100/90 text-amber-900 border-amber-300'
                                   : 'bg-amber-950/60 text-amber-200 border-amber-500/40'
-                                : isLightMode
-                                  ? 'bg-orange-100/90 text-orange-900 border-orange-300'
-                                  : 'bg-orange-950/60 text-orange-200 border-orange-500/40'
-                            }`}>
-                              <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
-                              <span>
-                                {(slot1Agent && (slot1Agent.name.includes('Emergency') || slot1Agent.id === 'voice_profile_agent') && agent.effectivePriority < 8.0)
-                                  ? "A stronger agent is using the resource. Please wait until it's free."
-                                  : "Resources are completely used by other agents. Please wait for a while until resource is available."}
-                              </span>
-                            </div>
+                              }`}>
+                                <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+                                <span>
+                                  No resource available right now: Resources are completely used by other agents. Please wait for a while until resource is available.
+                                </span>
+                              </div>
+                            ) : agent.id === 'language_agent' ? (
+                              <div className={`mt-2 p-2 rounded-xl border text-xs font-semibold flex items-center space-x-2 ${
+                                isLightMode
+                                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                                  : 'bg-emerald-950/50 text-emerald-300 border-emerald-700/50'
+                              }`}>
+                                <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                                <span>
+                                  Working on Translation Model in parallel · Lookahead reservation active for LLM handover
+                                </span>
+                              </div>
+                            ) : (
+                              <div className={`mt-2 p-2 rounded-xl border text-xs font-semibold flex items-center space-x-2 ${
+                                isLightMode
+                                  ? 'bg-sky-50 text-sky-800 border-sky-300'
+                                  : 'bg-sky-950/50 text-sky-300 border-sky-700/50'
+                              }`}>
+                                <Activity className="w-3.5 h-3.5 shrink-0 text-sky-600 dark:text-sky-400" />
+                                <span>
+                                  Working on Statutory Eligibility DB in parallel · Queued for next LLM validation window
+                                </span>
+                              </div>
+                            )}
 
                             <p className={`text-xs mt-1 font-mono ${
                               agent.isStarving ? 'text-rose-600 dark:text-rose-400 font-bold' : 'text-slate-500'

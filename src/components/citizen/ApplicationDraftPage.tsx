@@ -263,7 +263,7 @@ export const ApplicationDraftPage: React.FC<ApplicationDraftPageProps> = ({
       {/* Offline Mode Alert */}
       {/* Contention Notice if Cloud Resource is completely used */}
       {(() => {
-        const busyRes = status?.resources?.find(r => r.available_slots === 0);
+        const busyRes = status?.resources?.find(r => r.resource_id === 'llm' && r.available_slots === 0);
         if (busyRes) {
           return (
             <div className={`rounded-xl p-3.5 border flex items-start space-x-2.5 text-xs font-medium ${
@@ -276,10 +276,10 @@ export const ApplicationDraftPage: React.FC<ApplicationDraftPageProps> = ({
                 <div className="font-bold">
                   {busyRes.stronger_agent_using
                     ? "A stronger agent is using the resource. Please wait until it's free."
-                    : "Resources are completely used by other agents. Please wait for a while until resource is available."}
+                    : "No resource available right now: Resources are completely used by other agents. Please wait for a while until resource is available."}
                 </div>
                 <div className="text-[11px] opacity-80 mt-0.5">
-                  Resource '{busyRes.name}' is currently at capacity. Priority queue orchestrator will allocate your check automatically.
+                  Application Autofill Agent is queued for the next LLM execution slot. Other agents (Profile, Scheme Discovery, Document Intel) are currently active and functioning.
                 </div>
               </div>
             </div>
